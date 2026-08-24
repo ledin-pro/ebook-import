@@ -40,6 +40,24 @@ Check the current machine:
 ebook-import doctor --json
 ```
 
+## Parser API
+
+The package also exposes a filesystem-independent typed parsing API for other
+renderers and document systems:
+
+```python
+from pro.ledin.ebook_import import Heading, Paragraph, parse_book
+
+book = parse_book("/path/to/book.fb2")
+for chapter in book.chapters:
+    print(chapter.title, len(chapter.blocks))
+    print(chapter.markdown)
+```
+
+`ParsedChapter.blocks` contains immutable headings, paragraphs, groups, quotes,
+poems, tables, images, links, and footnotes. `chapter.markdown` is generated from
+the same typed model for compatibility with the Obsidian corpus renderer.
+
 ## Import
 
 Preview without writing to the vault:
@@ -150,13 +168,19 @@ no-ops. Changing image mode or importer output version rebuilds generated files.
 Books with the same metadata title do not overwrite one another: later
 collisions receive a deterministic format suffix.
 
-## Why not Docling?
+## Docling integration
 
-Docling currently supports EPUB but not FB2 or MOBI. Its EPUB backend flattens
-the spine into one document, does not expose the complete metadata needed by
-this corpus contract, has internal-anchor limitations, and installs a large ML
-stack. Structured ebooks therefore use the lightweight native/adapted paths
-above; Docling remains more appropriate for PDF, scan, and OCR workflows.
+Install [`pro-ledin-docling-ebook`](https://github.com/ledin-pro/docling-ebook)
+when a workflow needs a native `DoclingDocument` or Docling Markdown, JSON, and
+HTML export:
+
+```bash
+pip install pro-ledin-docling-ebook
+docling-ebook book.fb2 --to md --output-dir ./out
+```
+
+The integration is kept in a separate package so this parser and Obsidian
+importer remain lightweight.
 
 ## Development
 

@@ -12,6 +12,7 @@ text conversion. Do not hand-edit generated book files during import.
 ## Workflow
 
 1. Confirm each input is EPUB, FB2, FB2.ZIP/FBZ, MOBI, AZW, or AZW3. Route PDF and scans to document/OCR workflows. Reject KFX, AZW4, PRC, and DRM-removal requests.
+   When the user explicitly requests a DoclingDocument, Docling Markdown/JSON/HTML, Docling chunking, or a downstream Docling integration, use the separate `docling-ebook` skill and CLI instead of this vault-import workflow.
 2. Confirm the vault root and output directory. Prefer `05-sources/books`.
 3. If any MOBI/AZW/AZW3 input is present, run `ebook-import doctor --json`. Report the selected backend or exact installation requirement before continuing.
 4. Ask once per book with the `question` tool:

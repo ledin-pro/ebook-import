@@ -12,6 +12,35 @@ from typing import Any
 
 from defusedxml import ElementTree as ET
 
+from .content import (
+    Block,
+    CodeBlock,
+    Emphasis,
+    EmptyLine,
+    FootnoteDefinition,
+    FootnoteRef,
+    Group,
+    Heading,
+    ImageBlock,
+    ImageInline,
+    Inline,
+    InlineCode,
+    Link,
+    Paragraph,
+    Poem,
+    Quote,
+    Stanza,
+    Strike,
+    Strong,
+    Subscript,
+    Superscript,
+    Table,
+    TableCell,
+    TableRow,
+    Text,
+    Verse,
+    inline_text,
+)
 from .models import ParsedAsset, ParsedBook, ParsedChapter
 from .utils import EbookImportError, element_text, local_name, slugify
 
@@ -197,15 +226,15 @@ class Fb2Renderer:
         self.total_asset_bytes += len(data)
         return asset
 
-    def image_markdown(self, element: Any, alt: str = "") -> tuple[str, str, str]:
+    def image_node(self, element: Any, alt: str = "", role: str = "content") -> tuple[ImageInline | None, str, str]:
         binary_id = (element.attrib.get(XLINK_HREF) or attr_by_name(element, "href")).lstrip("#")
         if not binary_id or self.image_mode == "skip":
-            return "", "", ""
+            return None, "", ""
         asset = self.binary_asset(binary_id)
         if asset is None:
-            return "", "", ""
+            return None, "", ""
         label = alt or element.attrib.get("title", "")
-        return f"![{label}](../media/{asset.filename})", binary_id, asset.filename
+        return ImageInline(binary_id, asset.filename, label, role=role), binary_id, asset.filename
 
     def note_label(self, note_id: str) -> str:
         if note_id in self.note_labels:
@@ -220,23 +249,26 @@ class Fb2Renderer:
         self.used_note_labels.add(label)
         return label
 
-    def render_inline(self, element: Any, note_ids: list[str], images: list[str], media_files: list[str]) -> str:
-        parts: list[str] = [self.text(element.text)]
+    def render_inline(self, element: Any, note_ids: list[str], images: list[str], media_files: list[str]) -> tuple[Inline, ...]:
+        parts: list[Inline] = []
+        initial = self.text(element.text)
+        if initial:
+            parts.append(Text(initial))
         for item in element:
             tag = local_name(item.tag)
             content = self.render_inline(item, note_ids, images, media_files)
             if tag == "emphasis":
-                rendered = f"*{content.strip()}*"
+                rendered: Inline | None = Emphasis(content)
             elif tag == "strong":
-                rendered = f"**{content.strip()}**"
+                rendered = Strong(content)
             elif tag == "strikethrough":
-                rendered = f"~~{content.strip()}~~"
+                rendered = Strike(content)
             elif tag == "code":
-                rendered = f"`{content.strip()}`"
+                rendered = InlineCode(inline_text(content))
             elif tag == "sub":
-                rendered = f"<sub>{content.strip()}</sub>"
+                rendered = Subscript(content)
             elif tag == "sup":
-                rendered = f"<sup>{content.strip()}</sup>"
+                rendered = Superscript(content)
             elif tag == "a":
                 href = item.attrib.get(XLINK_HREF) or attr_by_name(item, "href")
                 link_type = item.attrib.get("type", "").lower()
@@ -245,48 +277,41 @@ class Fb2Renderer:
                     if target and target not in note_ids:
                         note_ids.append(target)
                     label = self.note_label(target)
-                    rendered = f"[^{label}]"
+                    rendered = FootnoteRef(target, label)
                 else:
-                    rendered = f"[{content.strip()}]({href})" if href else content
+                    rendered = Link(content, href) if href else None
             elif tag == "image":
-                rendered, source_id, filename = self.image_markdown(item)
+                rendered, source_id, filename = self.image_node(item)
                 if source_id:
                     images.append(source_id)
                     media_files.append(filename)
             else:
-                rendered = content
-            parts.append(rendered)
-            parts.append(self.text(item.tail))
-        return "".join(parts)
+                rendered = None
+                parts.extend(content)
+            if rendered is not None:
+                parts.append(rendered)
+            tail = self.text(item.tail)
+            if tail:
+                parts.append(Text(tail))
+        return tuple(parts)
 
-    @staticmethod
-    def quote(text: str) -> str:
-        return "\n".join(f"> {line}" if line else ">" for line in text.splitlines())
-
-    def render_table(self, element: Any, note_ids: list[str], images: list[str], media_files: list[str]) -> str:
-        rows: list[list[str]] = []
-        complex_table = False
+    def render_table(self, element: Any, note_ids: list[str], images: list[str], media_files: list[str]) -> Table | None:
+        rows: list[TableRow] = []
         for row in [item for item in element if local_name(item.tag) == "tr"]:
-            cells: list[str] = []
+            cells: list[TableCell] = []
             for cell in row:
                 if local_name(cell.tag) not in {"td", "th"}:
                     continue
-                if cell.attrib.get("rowspan") or cell.attrib.get("colspan"):
-                    complex_table = True
-                cells.append(self.render_inline(cell, note_ids, images, media_files).strip())
-            rows.append(cells)
-        width = max((len(row) for row in rows), default=0)
-        if not rows or not width:
-            return ""
-        if complex_table or any(len(row) != width for row in rows):
-            html_rows = ["<table>"]
-            for row in rows:
-                html_rows.append("  <tr>" + "".join(f"<td>{html.escape(cell)}</td>" for cell in row) + "</tr>")
-            html_rows.append("</table>")
-            return "\n".join(html_rows)
-        lines = ["| " + " | ".join(rows[0]) + " |", "| " + " | ".join("---" for _ in rows[0]) + " |"]
-        lines.extend("| " + " | ".join(row) + " |" for row in rows[1:])
-        return "\n".join(lines)
+                cells.append(
+                    TableCell(
+                        self.render_inline(cell, note_ids, images, media_files),
+                        header=local_name(cell.tag) == "th",
+                        rowspan=max(1, int(cell.attrib.get("rowspan", "1") or "1")),
+                        colspan=max(1, int(cell.attrib.get("colspan", "1") or "1")),
+                    )
+                )
+            rows.append(TableRow(tuple(cells)))
+        return Table(tuple(rows)) if any(row.cells for row in rows) else None
 
     def render_blocks(
         self,
@@ -297,68 +322,73 @@ class Fb2Renderer:
         media_files: list[str],
         *,
         include_section_title: bool = True,
-    ) -> str:
-        blocks: list[str] = []
+    ) -> tuple[Block, ...]:
+        blocks: list[Block] = []
         for item in element:
             tag = local_name(item.tag)
             if tag == "title":
                 if include_section_title:
-                    title = element_text(item)
-                    if title:
-                        blocks.append(f"{'#' * min(heading_level, 6)} {title}")
+                    title_nodes = self.render_inline(item, note_ids, images, media_files)
+                    if inline_text(title_nodes).strip():
+                        blocks.append(Heading(min(heading_level, 6), title_nodes))
             elif tag in {"p", "subtitle", "text-author", "annotation"}:
-                text = self.render_inline(item, note_ids, images, media_files).strip()
-                if not text:
+                nodes = self.render_inline(item, note_ids, images, media_files)
+                if not inline_text(nodes).strip():
                     continue
                 if tag == "subtitle":
-                    blocks.append(f"{'#' * min(heading_level, 6)} {text}")
+                    blocks.append(Heading(min(heading_level, 6), nodes))
                 elif tag == "text-author":
-                    blocks.append(self.quote(text))
+                    blocks.append(Quote((), attribution=nodes))
                 else:
-                    blocks.append(text)
+                    blocks.append(Paragraph(nodes))
             elif tag == "empty-line":
-                blocks.append("")
+                blocks.append(EmptyLine())
             elif tag == "section":
-                blocks.append(self.render_blocks(item, heading_level + 1, note_ids, images, media_files))
+                title_element = child(item, "title")
+                title_nodes = self.render_inline(title_element, note_ids, images, media_files) if title_element is not None else ()
+                nested = self.render_blocks(item, heading_level + 1, note_ids, images, media_files, include_section_title=False)
+                blocks.append(Group("section", nested, title_nodes, min(heading_level + 1, 6)))
             elif tag in {"epigraph", "cite"}:
-                content = self.render_blocks(item, heading_level, note_ids, images, media_files)
-                if content:
-                    blocks.append(self.quote(content))
+                attribution_element = child(item, "text-author")
+                attribution = self.render_inline(attribution_element, note_ids, images, media_files) if attribution_element is not None else ()
+                content = tuple(block for block in self.render_blocks(item, heading_level, note_ids, images, media_files) if not (isinstance(block, Quote) and not block.children))
+                if content or attribution:
+                    blocks.append(Quote(content, "epigraph" if tag == "epigraph" else "cite", attribution))
             elif tag == "poem":
-                poem: list[str] = []
                 poem_title = child(item, "title")
-                if poem_title is not None and element_text(poem_title):
-                    poem.append(f"{'#' * min(heading_level, 6)} {element_text(poem_title)}")
+                title_nodes = self.render_inline(poem_title, note_ids, images, media_files) if poem_title is not None else ()
+                stanzas: list[Stanza] = []
+                attribution: tuple[Inline, ...] = ()
                 for part in item:
                     part_tag = local_name(part.tag)
                     if part_tag == "stanza":
-                        verses = [self.render_inline(v, note_ids, images, media_files).strip() for v in part if local_name(v.tag) == "v"]
-                        poem.append("  \n".join(verse for verse in verses if verse))
+                        verses = tuple(Verse(self.render_inline(v, note_ids, images, media_files)) for v in part if local_name(v.tag) == "v")
+                        stanzas.append(Stanza(verses))
                     elif part_tag == "text-author":
-                        poem.append(self.quote(element_text(part)))
-                blocks.append("\n\n".join(item for item in poem if item))
+                        attribution = self.render_inline(part, note_ids, images, media_files)
+                blocks.append(Poem(title_nodes, tuple(stanzas), attribution, min(heading_level, 6)))
             elif tag == "table":
                 table = self.render_table(item, note_ids, images, media_files)
                 if table:
                     blocks.append(table)
             elif tag == "image":
-                rendered, source_id, filename = self.image_markdown(item)
-                if rendered:
+                image, source_id, filename = self.image_node(item)
+                if image:
                     images.append(source_id)
                     media_files.append(filename)
-                    blocks.append(rendered)
+                    blocks.append(ImageBlock(image))
             elif tag not in {"binary"}:
                 nested = self.render_blocks(item, heading_level, note_ids, images, media_files)
                 if nested:
-                    blocks.append(nested)
-        return "\n\n".join(block for block in blocks if block is not None).strip()
+                    blocks.extend(nested)
+        return tuple(blocks)
 
-    def render_note(self, note_id: str) -> str:
+    def render_note(self, note_id: str) -> tuple[Block, ...]:
         note = self.notes.get(note_id)
         if note is None:
             self.warnings.append(f"Missing FB2 note target: {note_id}")
-            return "Missing note."
-        return self.render_blocks(note, 2, [], [], [], include_section_title=False).strip()
+            return (Paragraph((Text("Missing note."),)),)
+        return self.render_blocks(note, 2, [], [], [], include_section_title=False)
 
     def render_chapter(self, section: Any, index: int) -> ParsedChapter:
         section_id = section.attrib.get("id", "")
@@ -369,17 +399,13 @@ class Fb2Renderer:
         self.used_note_labels = set()
         images: list[str] = []
         media_files: list[str] = []
-        markdown = self.render_blocks(section, 2, note_ids, images, media_files, include_section_title=False)
+        blocks = list(self.render_blocks(section, 2, note_ids, images, media_files, include_section_title=False))
         if note_ids:
-            definitions: list[str] = []
             for note_id in note_ids:
                 label = self.note_label(note_id)
-                content = self.render_note(note_id)
-                lines = content.splitlines() or [""]
-                definitions.append(f"[^{label}]: {lines[0]}" + "".join(f"\n    {line}" for line in lines[1:]))
-            markdown = markdown.rstrip() + "\n\n" + "\n\n".join(definitions)
+                blocks.append(FootnoteDefinition(note_id, label, self.render_note(note_id)))
         source_href = f"fb2:#{section_id}" if section_id else f"fb2:section-{index}"
-        return ParsedChapter(title, source_href, markdown.strip() + "\n", images, media_files)
+        return ParsedChapter(title, source_href, tuple(blocks), images, media_files)
 
 
 def parse_fb2(source: Path, image_mode: str = "import") -> ParsedBook:

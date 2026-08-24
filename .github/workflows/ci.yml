@@ -74,7 +74,7 @@ jobs:
         run: uv build
 
       - name: Smoke-test wheel
-        run: uv run --isolated --no-project --with dist/pro_ledin_ebook_import-0.2.0-py3-none-any.whl ebook-import --help
+        run: uv run --isolated --no-project --with dist/pro_ledin_ebook_import-0.3.0-py3-none-any.whl ebook-import --help
 
       - name: Inspect distribution contents
-        run: tar -tf dist/pro_ledin_ebook_import-0.2.0.tar.gz && unzip -l dist/pro_ledin_ebook_import-0.2.0-py3-none-any.whl
+        run: tar -tf dist/pro_ledin_ebook_import-0.3.0.tar.gz && unzip -l dist/pro_ledin_ebook_import-0.3.0-py3-none-any.whl

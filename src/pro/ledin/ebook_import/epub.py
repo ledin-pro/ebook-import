@@ -12,6 +12,7 @@ from urllib.parse import unquote
 
 from defusedxml import ElementTree as ET
 
+from .content import parse_markdown_blocks
 from .models import ParsedAsset, ParsedBook, ParsedChapter
 from .utils import EbookImportError, element_text, local_name, slugify
 
@@ -342,5 +343,5 @@ def parse_epub(source: Path, image_mode: str = "import") -> ParsedBook:
             content = parser.markdown()
             title = chapter_title(content, nav_titles.get(href, ""), href)
             content = remove_duplicate_leading_heading(content, title)
-            chapters.append(ParsedChapter(title, href, content, parser.image_files, parser.image_outputs))
+            chapters.append(ParsedChapter(title, href, parse_markdown_blocks(content), parser.image_files, parser.image_outputs))
     return ParsedBook("epub", metadata, chapters, assets)

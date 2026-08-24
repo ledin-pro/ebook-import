@@ -9,11 +9,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .epub import parse_epub
-from .fb2 import parse_fb2
-from .mobi import available_backends, parse_mobi
+from .mobi import available_backends
+from .parsing import parse_book
 from .render import apply_image_text, build_index, render_book
-from .utils import EbookImportError, detect_source_format
+from .utils import EbookImportError
 
 
 def import_book(
@@ -23,13 +22,7 @@ def import_book(
     dry_run: bool = False,
     mobi_backend: str = "auto",
 ) -> dict[str, Any]:
-    source_format = detect_source_format(source)
-    if source_format == "epub":
-        parsed = parse_epub(source, image_mode)
-    elif source_format == "fb2":
-        parsed = parse_fb2(source, image_mode)
-    else:
-        parsed = parse_mobi(source, source_format, image_mode, mobi_backend)
+    parsed = parse_book(source, image_mode=image_mode, mobi_backend=mobi_backend)
     return render_book(parsed, source, books_root, image_mode, dry_run)
 
 
