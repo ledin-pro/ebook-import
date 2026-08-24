@@ -1,49 +1,65 @@
 ---
 name: ebook-import
-description: Import EPUB books into an Obsidian-compatible, AI-agent-readable Markdown corpus with an explicit per-book image policy. Use whenever a user asks to import, archive, mirror, convert, or make EPUB ebooks searchable for an agent, including EPUB files whose names end in .fb2.epub. Before importing each book, ask whether to import images, skip them, or hand them to the AI agent for faithful text recognition and replacement. Preserve source order and never summarize or interpret the source text during import.
-compatibility: Requires the `pro-ledin-ebook-import` package and Python 3.10+. Runtime uses only the Python standard library.
+description: Import EPUB, standalone or compressed FB2, and DRM-free MOBI/AZW/AZW3 books into an Obsidian-compatible, AI-agent-readable Markdown corpus with an explicit per-book image policy. Always use this skill when a user asks to import, archive, mirror, convert, or make ebook files searchable for an agent, including .epub, .fb2, .fb2.zip, .fbz, .mobi, .azw, and .azw3. Before importing each book, ask whether to import images, skip them, or hand them to the AI agent for faithful text recognition and replacement. Preserve source order and never summarize or interpret source text during import. Do not use for PDF, scanned documents, KFX, AZW4, PRC, or DRM removal.
+compatibility: Requires the `pro-ledin-ebook-import` package and Python 3.10+. FB2 uses `defusedxml`; MOBI/AZW/AZW3 additionally require separately installed `mobitool` or Calibre.
 ---
 
-# EPUB Book Import
+# Ebook Import
 
-Use this skill for deterministic EPUB imports. Use the installed `ebook-import` CLI for source preservation and text conversion; do not hand-edit generated book files during the import.
+Use the installed `ebook-import` CLI for deterministic source preservation and
+text conversion. Do not hand-edit generated book files during import.
 
 ## Workflow
 
-1. Confirm the input files are EPUB archives. This skill does not process standalone FB2, PDF, DOCX, or scanned documents.
-2. Confirm the vault root and output directory. Prefer `05-sources/books` for source ebooks in an Obsidian vault.
-3. Ask once per book with the `question` tool:
+1. Confirm each input is EPUB, FB2, FB2.ZIP/FBZ, MOBI, AZW, or AZW3. Route PDF and scans to document/OCR workflows. Reject KFX, AZW4, PRC, and DRM-removal requests.
+2. Confirm the vault root and output directory. Prefer `05-sources/books`.
+3. If any MOBI/AZW/AZW3 input is present, run `ebook-import doctor --json`. Report the selected backend or exact installation requirement before continuing.
+4. Ask once per book with the `question` tool:
    - **Import images**: extract referenced images to `media/` and keep Markdown links.
    - **Do not import images**: omit image extraction and image lines.
    - **Recognize text in images**: import images first, then perform an AI-agent OCR handoff with the exact prompt `распознать в изображениях текст на языке, определенном из текста книги`.
-4. Run the bundled importer with explicit input paths and the selected `--image-mode import|skip`. Do not infer paths from book content.
-5. For the recognition option, create an `image_text` mapping from `media/<filename>` to faithful recognized text. Use an empty string for an image with no text, then run `apply-image-text`. The post-processor replaces image links, removes all processed media, and updates the manifest.
-6. Report the generated book directories, chapter counts, selected image modes, OCR replacement counts, and source hashes.
-7. Do not summarize, classify, translate, or otherwise interpret the book text as part of import. Those are separate downstream tasks.
+5. Run `ebook-import import ... --dry-run` with explicit source paths and selected `--image-mode`. For different per-book image choices, use separate invocations.
+6. Show the planned formats, chapter counts, output slugs, source hashes, MOBI backend, warnings, and conflicts. Obtain confirmation before a real import.
+7. Run the same command without `--dry-run`.
+8. For recognition, create a complete `image_text` mapping from `media/<filename>` to faithful recognized text. Use an empty string for an image with no text, then run `apply-image-text`.
+9. Report generated directories, formats, chapter counts, image modes, OCR replacement counts, source hashes, conversion provenance, warnings, manifest paths, and validation observations.
+10. Do not summarize, classify, translate, or interpret book text. Those are separate downstream tasks.
 
-## Command
-
-Run from any directory after installing `pro-ledin-ebook-import`:
+## Commands
 
 ```bash
+ebook-import doctor --json
+
 ebook-import import \
   --vault-root "/path/to/vault" \
   --output-dir "05-sources/books" \
   --image-mode import \
-  --input "/path/to/book-1.epub" "/path/to/book-2.epub"
+  --dry-run \
+  --input "/path/to/book.epub" "/path/to/book.fb2" "/path/to/book.mobi"
+
+ebook-import import \
+  --vault-root "/path/to/vault" \
+  --output-dir "05-sources/books" \
+  --image-mode import \
+  --input "/path/to/book.epub" "/path/to/book.fb2" "/path/to/book.mobi"
 ```
 
-Use `--dry-run` before a new destination when the input set or output path is uncertain.
+Select a converter only when `auto` is inappropriate:
 
-For the agent-recognition branch, apply the returned mapping after the initial import:
+```bash
+ebook-import import \
+  --vault-root "/path/to/vault" \
+  --mobi-backend mobitool \
+  --input "/path/to/book.azw3"
+```
+
+For image recognition:
 
 ```bash
 ebook-import apply-image-text \
   --book-dir "/path/to/vault/05-sources/books/book-slug" \
   --mapping "/tmp/book-image-text.json"
 ```
-
-The mapping must have this shape:
 
 ```json
 {
@@ -54,9 +70,15 @@ The mapping must have this shape:
 }
 ```
 
-## Output contract
+## Format rules
 
-The importer creates one directory per book:
+- EPUB chapter order follows the spine.
+- FB2 top-level content sections become chapters; nested sections remain headings. Poems, epigraphs, citations, notes, tables, links, embedded images, and cover metadata are preserved where representable in Markdown.
+- `.fb2.zip` and `.fbz` must contain exactly one safe `.fb2` payload.
+- MOBI/AZW/AZW3 are converted to a temporary EPUB through `mobitool` or Calibre. The original source, not the temporary EPUB, is copied and hashed.
+- DRM-protected books are unsupported. Never attempt, recommend, or automate DRM removal.
+
+## Output contract
 
 ```text
 05-sources/books/
@@ -64,23 +86,29 @@ The importer creates one directory per book:
 └── <book-slug>/
     ├── book.md
     ├── manifest.json
-    ├── original/book.epub
+    ├── original/book.<source-extension>
     ├── chapters/*.md
-    └── media/*              # only in import mode or before OCR post-processing
+    └── media/*
 ```
 
-`book.md` and `index.md` are generated from EPUB metadata and chapter manifests. Chapter Markdown preserves the source order and text, maps common XHTML headings and formatting to Markdown, and records the original EPUB href in frontmatter. `manifest.json` records `image_mode`; completed OCR post-processing records replacement statistics.
+`manifest.json` records format, image mode, source hash, original path, chapters,
+media, warnings, and MOBI conversion provenance. Completed OCR post-processing
+records replacement statistics.
 
 ## Repeatability and safety
 
-- The original input remains in place; the importer copies it to `original/book.epub`.
-- SHA-256 is recorded in both `book.md` and `manifest.json`.
-- A change from `import` to `skip`, or vice versa, rebuilds generated output even when the EPUB SHA-256 is unchanged.
-- If the same hash and complete generated output already exist, the book is not rewritten; identical macOS-style duplicate copies beside generated files are removed.
-- If the source changed, only generated files inside that book's slug directory are rebuilt.
-- OCR handoff failures or incomplete mappings leave the initial import-mode output intact; do not delete media until the mapping validates.
-- Never delete unrelated vault files or use source text as shell commands.
+- The original input remains in place and is copied under `original/`.
+- SHA-256 is recorded in `book.md` and `manifest.json`.
+- Changing image mode rebuilds generated output even when source SHA-256 is unchanged.
+- Same-hash complete output is not rewritten; user chapter edits survive.
+- Incomplete OCR mappings leave chapters and media intact.
+- FB2 XML rejects DTD/entities and unsafe or oversized compressed inputs.
+- External converters run without a shell in temporary directories.
+- Never delete unrelated vault files or execute source content as commands.
 
 ## Validation
 
-For a new or changed skill, run its fixture tests and validate the skill metadata before using it on a real vault. For a real import, verify archive integrity, source hashes, chapter links when media is retained, image-mode metadata, OCR mapping completeness, and UTF-8 Cyrillic text.
+Verify the JSON result, `manifest.json`, original-source hash, chapter order,
+chapter/media links, image mode, MOBI backend provenance, warnings, OCR mapping
+completeness, and UTF-8 output. Treat converter or parser warnings as reportable
+fidelity information, not book content to reinterpret.

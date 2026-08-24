@@ -4,6 +4,9 @@
 !.env.example
 __pycache__/
 .pytest_cache/
+.coverage
+coverage.json
+htmlcov/
 .venv/
 .opencode/
 build/

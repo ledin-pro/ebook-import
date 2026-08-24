@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["books_root", "books", "dry_run"],
+  "properties": {
+    "books_root": {"type": "string"},
+    "dry_run": {"type": "boolean"},
+    "books": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["slug", "title", "authors", "format", "sha256", "chapters"],
+        "properties": {
+          "slug": {"type": "string", "minLength": 1},
+          "title": {"type": "string", "minLength": 1},
+          "authors": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+          "format": {"enum": ["epub", "fb2", "mobi", "azw", "azw3"]},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "chapters": {"oneOf": [{"type": "integer", "minimum": 0}, {"type": "array"}]},
+          "warnings": {"type": "array", "items": {"type": "string"}},
+          "assets": {"type": "object", "additionalProperties": {"type": "string"}},
+          "conversion": {
+            "type": "object",
+            "required": ["backend", "backend_version", "intermediate_format"],
+            "properties": {
+              "backend": {"enum": ["mobitool", "calibre"]},
+              "backend_version": {"type": "string"},
+              "intermediate_format": {"const": "epub"}
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

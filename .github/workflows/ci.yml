@@ -21,4 +21,60 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Run tests
-        run: uv run --extra dev pytest -q
+        run: uv run --extra dev pytest -q -m "not external"
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run coverage suite
+        run: uv run --extra dev pytest -q -m "not external" --cov=pro.ledin.ebook_import --cov-branch --cov-report=term --cov-report=json
+
+      - name: Enforce statement and branch coverage
+        run: uv run python scripts/check_coverage.py coverage.json
+
+  external-mobi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MOBI converters
+        run: sudo apt-get update && sudo apt-get install -y calibre libmobi-tools
+
+      - name: Report converter versions
+        run: ebook-convert --version && mobitool -v
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run real converter integration
+        env:
+          EBOOK_IMPORT_EXTERNAL_TESTS: "1"
+        run: uv run --extra dev pytest -q tests/test_real_mobi_tools.py
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build distributions
+        run: uv build
+
+      - name: Smoke-test wheel
+        run: uv run --isolated --no-project --with dist/pro_ledin_ebook_import-0.2.0-py3-none-any.whl ebook-import --help
+
+      - name: Inspect distribution contents
+        run: tar -tf dist/pro_ledin_ebook_import-0.2.0.tar.gz && unzip -l dist/pro_ledin_ebook_import-0.2.0-py3-none-any.whl

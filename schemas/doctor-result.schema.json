@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["supported_formats", "mobi_backends", "auto_mobi_backend"],
+  "properties": {
+    "supported_formats": {"type": "array", "items": {"type": "string"}},
+    "auto_mobi_backend": {"enum": ["", "mobitool", "calibre"]},
+    "mobi_backends": {
+      "type": "object",
+      "required": ["mobitool", "calibre"],
+      "additionalProperties": false,
+      "properties": {
+        "mobitool": {"$ref": "#/$defs/backend"},
+        "calibre": {"$ref": "#/$defs/backend"}
+      }
+    }
+  },
+  "$defs": {
+    "backend": {
+      "type": "object",
+      "required": ["available", "path", "version"],
+      "properties": {
+        "available": {"type": "boolean"},
+        "path": {"type": "string"},
+        "version": {"type": "string"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pro-ledin-ebook-import"
-version = "0.1.0"
-description = "Deterministic EPUB to Obsidian Markdown importer for AI-agent-readable book sources."
+version = "0.2.0"
+description = "Deterministic EPUB, FB2, and MOBI-family importer for AI-agent-readable Markdown corpora."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "mxl" }]
-keywords = ["epub", "obsidian", "markdown", "ebooks", "ai-agents"]
+keywords = ["epub", "fb2", "mobi", "azw3", "obsidian", "markdown", "ebooks", "ai-agents"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
@@ -24,10 +24,10 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Topic :: Text Processing :: Markup :: Markdown",
 ]
-dependencies = []
+dependencies = ["defusedxml>=0.7.1,<1"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["hypothesis>=6.0", "jsonschema>=4.25,<5", "pytest>=8.0", "pytest-cov>=6.0"]
 
 [project.scripts]
 ebook-import = "pro.ledin.ebook_import.core:main"
@@ -44,6 +44,7 @@ include = [
     "src/pro",
     "tests",
     "evals",
+    "schemas",
     "skills/ebook-import/SKILL.md",
     "README.md",
     "LICENSE",
@@ -52,3 +53,4 @@ include = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = ["external: requires real mobitool and Calibre executables"]

@@ -28,6 +28,9 @@ jobs:
             exit 1
           fi
 
+      - name: Run release tests
+        run: uv run --extra dev pytest -q -m "not external"
+
       - name: Build sdist and wheel
         run: uv build
 
