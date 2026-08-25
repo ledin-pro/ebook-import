@@ -260,14 +260,6 @@ def test_render_helpers_invalid_state(tmp_path: Path) -> None:
     invalid.write_text("not json")
     assert render.read_manifest(invalid) is None
     assert render.generated_output_complete(tmp_path, {}) is False
-    book = tmp_path / "book.md"
-    book.write_text("no frontmatter")
-    with pytest.raises(ValueError, match="no YAML"):
-        render.set_book_frontmatter(book, {"x": "y"})
-
-    book.write_text("---\nx: y\n")
-    with pytest.raises(ValueError, match="unterminated"):
-        render.set_book_frontmatter(book, {"x": "z"})
 
 
 def test_generated_output_completeness_branches(tmp_path: Path) -> None:
@@ -290,12 +282,3 @@ def test_generated_output_completeness_branches(tmp_path: Path) -> None:
     media.mkdir()
     (media / "missing.png").write_bytes(b"x")
     assert render.generated_output_complete(tmp_path, manifest) is True
-
-
-def test_set_frontmatter_replaces_and_appends(tmp_path: Path) -> None:
-    book = tmp_path / "book.md"
-    book.write_text('---\nimage_mode: "import"\n---\n# Book\n')
-    render.set_book_frontmatter(book, {"image_mode": "ocr", "ocr_status": "completed"})
-    text = book.read_text()
-    assert 'image_mode: "ocr"' in text
-    assert 'ocr_status: "completed"' in text

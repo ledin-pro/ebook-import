@@ -141,20 +141,3 @@ def test_fb2_dry_run_writes_nothing(tmp_path: Path) -> None:
     make_fb2(source)
     assert main(["import", "--vault-root", str(vault), "--dry-run", "--input", str(source)]) == 0
     assert not vault.exists()
-
-
-def test_fb2_ocr_preserves_cover_asset_used_by_book_metadata(tmp_path: Path) -> None:
-    source = tmp_path / "book.fb2"
-    vault = tmp_path / "vault"
-    mapping = tmp_path / "mapping.json"
-    make_fb2(source)
-    assert main(["import", "--vault-root", str(vault), "--input", str(source)]) == 0
-    output = book_dir(vault)
-    mapping.write_text(json.dumps({"image_text": {"media/cover.png": "Текст с картинки"}}), encoding="utf-8")
-    assert main(["apply-image-text", "--book-dir", str(output), "--mapping", str(mapping)]) == 0
-    manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
-    assert (output / "media/cover.png").is_file()
-    assert manifest["cover_image"] == "media/cover.png"
-    assert manifest["media"] == ["cover.png"]
-    assert manifest["assets"] == {"cover.png": "media/cover.png"}
-    assert "Текст с картинки" in next((output / "chapters").glob("001-*.md")).read_text(encoding="utf-8")

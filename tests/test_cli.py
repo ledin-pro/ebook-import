@@ -25,6 +25,7 @@ def test_module_entrypoint_help_and_doctor() -> None:
     assert help_result.returncode == 0
     assert "import" in help_result.stdout
     assert "doctor" in help_result.stdout
+    assert "apply-image-text" not in help_result.stdout
     doctor_result = run_module("doctor", "--json")
     assert doctor_result.returncode == 0
     report = json.loads(doctor_result.stdout)
@@ -60,19 +61,10 @@ def test_mixed_format_import_and_title_collision(tmp_path: Path) -> None:
     assert (vault / "05-sources/books/same-title-epub/manifest.json").is_file()
 
 
-def test_incomplete_ocr_mapping_is_atomic(tmp_path: Path) -> None:
-    source = tmp_path / "book.fb2"
-    vault = tmp_path / "vault"
-    mapping = tmp_path / "mapping.json"
-    make_fb2(source)
-    assert main(["import", "--vault-root", str(vault), "--input", str(source)]) == 0
-    output = vault / "05-sources/books/testovaya-fb2-kniga"
-    chapter = next((output / "chapters").glob("001-*.md"))
-    before = chapter.read_text(encoding="utf-8")
-    mapping.write_text('{"image_text": {}}', encoding="utf-8")
-    assert main(["apply-image-text", "--book-dir", str(output), "--mapping", str(mapping)]) == 8
-    assert chapter.read_text(encoding="utf-8") == before
-    assert (output / "media/cover.png").is_file()
+def test_removed_apply_image_text_command_is_rejected() -> None:
+    result = run_module("apply-image-text")
+    assert result.returncode == 2
+    assert "invalid choice" in result.stderr
 
 
 def test_missing_input_has_stable_error(tmp_path: Path) -> None:

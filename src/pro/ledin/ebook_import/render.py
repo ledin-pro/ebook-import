@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .models import ParsedBook
-from .utils import IMAGE_PATTERN, IMPORTER_VERSION, original_extension, render_frontmatter, sha256, slugify, yaml_string
+from .utils import IMAGE_PATTERN, IMPORTER_VERSION, original_extension, render_frontmatter, sha256, slugify
 
 
 def read_manifest(path: Path) -> dict[str, Any] | None:
@@ -95,107 +95,6 @@ def remove_duplicate_copies(book_dir: Path, manifest: dict[str, Any]) -> int:
                 path.unlink()
                 removed += 1
     return removed
-
-
-def set_book_frontmatter(path: Path, values: dict[str, str]) -> None:
-    text = path.read_text(encoding="utf-8")
-    if not text.startswith("---\n"):
-        raise ValueError(f"Book file has no YAML frontmatter: {path}")
-    end = text.find("\n---\n", 4)
-    if end < 0:
-        raise ValueError(f"Book file has unterminated YAML frontmatter: {path}")
-    frontmatter = text[4:end]
-    for key, value in values.items():
-        rendered = f"{key}: {yaml_string(value)}"
-        pattern = re.compile(rf"^{re.escape(key)}:.*$", re.MULTILINE)
-        if pattern.search(frontmatter):
-            frontmatter = pattern.sub(rendered, frontmatter)
-        else:
-            frontmatter += f"\n{rendered}"
-    path.write_text("---\n" + frontmatter + "\n---\n" + text[end + len("\n---\n"):], encoding="utf-8")
-
-
-def apply_image_text(book_dir: Path, mapping_path: Path) -> dict[str, Any]:
-    manifest_path = book_dir / "manifest.json"
-    manifest = read_manifest(manifest_path)
-    if manifest is None:
-        raise ValueError(f"Book manifest is missing or invalid: {manifest_path}")
-    mapping_data = json.loads(mapping_path.read_text(encoding="utf-8"))
-    mapping = mapping_data.get("image_text") if isinstance(mapping_data, dict) else None
-    if not isinstance(mapping, dict):
-        raise ValueError("OCR mapping must be an object with an image_text object")
-    changes: dict[Path, str] = {}
-    referenced_media: set[Path] = set()
-    retained_media: set[Path] = set()
-    retained_sources: set[str] = set()
-    missing: set[str] = set()
-    replaced = 0
-    without_text = 0
-    cover_path = (book_dir / manifest["cover_image"]).resolve() if manifest.get("cover_image") else None
-    for source_id, asset_path in manifest.get("assets", {}).items():
-        if cover_path and (book_dir / asset_path).resolve() == cover_path:
-            retained_sources.add(source_id)
-            retained_media.add(cover_path)
-    for chapter in manifest.get("chapters", []):
-        chapter_path = book_dir / chapter["file"]
-        text = chapter_path.read_text(encoding="utf-8")
-        for source_id, filename in zip(chapter.get("images", []), chapter.get("media_files", [])):
-            media_path = (book_dir / "media" / filename).resolve()
-            if cover_path and media_path == cover_path:
-                retained_media.add(media_path)
-                retained_sources.add(source_id)
-
-        def replace_image(match: re.Match[str]) -> str:
-            nonlocal replaced, without_text
-            href = match.group(2)
-            media_path = (chapter_path.parent / href).resolve()
-            media_key = media_path.relative_to(book_dir.resolve()).as_posix()
-            referenced_media.add(media_path)
-            if media_key not in mapping:
-                missing.add(media_key)
-                return match.group(0)
-            value = mapping[media_key]
-            if value is None:
-                value = ""
-            if not isinstance(value, str):
-                raise ValueError(f"OCR mapping value must be text or empty: {media_key}")
-            value = value.strip()
-            if value:
-                replaced += 1
-                return value
-            without_text += 1
-            return ""
-
-        changes[chapter_path] = IMAGE_PATTERN.sub(replace_image, text)
-    if missing:
-        raise ValueError(f"OCR mapping is incomplete; missing: {', '.join(sorted(missing))}")
-    for chapter_path, text in changes.items():
-        chapter_path.write_text(text, encoding="utf-8")
-    for media_path in referenced_media:
-        if media_path not in retained_media and media_path.is_file():
-            media_path.unlink()
-    media_dir = book_dir / "media"
-    if media_dir.is_dir() and not any(media_dir.iterdir()):
-        media_dir.rmdir()
-    for chapter in manifest.get("chapters", []):
-        chapter["images"] = []
-        chapter["media_files"] = []
-    manifest["image_mode"] = "ocr"
-    manifest["media"] = sorted(retained_sources)
-    manifest["assets"] = {
-        source_id: asset_path
-        for source_id, asset_path in manifest.get("assets", {}).items()
-        if source_id in retained_sources
-    }
-    manifest["ocr"] = {
-        "status": "completed",
-        "images_processed": replaced + without_text,
-        "replaced": replaced,
-        "without_text": without_text,
-    }
-    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    set_book_frontmatter(book_dir / "book.md", {"image_mode": "ocr", "ocr_status": "completed"})
-    return manifest
 
 
 def resolve_book_dir(books_root: Path, parsed: ParsedBook, source: Path, source_hash: str) -> tuple[str, Path]:

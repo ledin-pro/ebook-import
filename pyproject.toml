@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pro-ledin-ebook-import"
-version = "0.3.0"
+version = "0.4.0"
 description = "Deterministic EPUB, FB2, and MOBI-family importer for AI-agent-readable Markdown corpora."
 readme = "README.md"
 requires-python = ">=3.10"

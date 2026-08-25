@@ -99,28 +99,6 @@ not retry or bypass DRM/encryption failures.
 Use `--image-mode import` to extract referenced images or `--image-mode skip`
 to omit image files and Markdown image markers.
 
-After an image import, an AI agent can replace chapter image links with a
-complete recognized-text mapping:
-
-```bash
-ebook-import apply-image-text \
-  --book-dir "/path/to/vault/05-sources/books/book-slug" \
-  --mapping "/tmp/book-image-text.json"
-```
-
-```json
-{
-  "image_text": {
-    "media/page-001.png": "Recognized text from the image",
-    "media/page-002.png": ""
-  }
-}
-```
-
-`apply-image-text` validates completeness before mutation. An incomplete
-mapping leaves chapters and media unchanged. A retained FB2 cover remains in
-`media/` when the same image also appears in a chapter.
-
 ## Format behavior
 
 ### EPUB
@@ -170,17 +148,17 @@ collisions receive a deterministic format suffix.
 
 ## Docling integration
 
-Install [`pro-ledin-docling-ebook`](https://github.com/ledin-pro/docling-ebook)
-when a workflow needs a native `DoclingDocument` or Docling Markdown, JSON, and
-HTML export:
+Use the separate [`docling-ebook`](https://github.com/ledin-pro/docling-ebook)
+package and skill when an ebook request explicitly requires Docling output or
+OCR/image-text extraction. `ebook-import` does not duplicate those behaviors.
 
 ```bash
 pip install pro-ledin-docling-ebook
-docling-ebook book.fb2 --to md --output-dir ./out
+docling-ebook book.fb2 --images referenced --to md --output-dir ./out
 ```
 
-The integration is kept in a separate package so this parser and Obsidian
-importer remain lightweight.
+The integration is kept separate so this parser and Obsidian importer remain
+lightweight and deterministic.
 
 ## Development
 

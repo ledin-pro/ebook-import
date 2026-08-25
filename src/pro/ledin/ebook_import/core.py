@@ -11,7 +11,7 @@ from typing import Any
 
 from .mobi import available_backends
 from .parsing import parse_book
-from .render import apply_image_text, build_index, render_book
+from .render import build_index, render_book
 from .utils import EbookImportError
 
 
@@ -51,10 +51,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     import_parser.add_argument("--mobi-backend", choices=("auto", "mobitool", "calibre"), default="auto")
     import_parser.add_argument("--dry-run", action="store_true")
     import_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON (default output is JSON)")
-    apply_parser = subparsers.add_parser("apply-image-text", help="Apply an agent-produced image text mapping")
-    apply_parser.add_argument("--book-dir", type=Path, required=True)
-    apply_parser.add_argument("--mapping", type=Path, required=True)
-    apply_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON (default output is JSON)")
     doctor_parser = subparsers.add_parser("doctor", help="Report optional MOBI converter availability")
     doctor_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON (default output is JSON)")
     return parser.parse_args(argv)
@@ -76,10 +72,6 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "doctor":
             print(json.dumps(doctor(), ensure_ascii=False, indent=2))
-            return 0
-        if args.command == "apply-image-text":
-            result = apply_image_text(args.book_dir.expanduser().resolve(), args.mapping.expanduser().resolve())
-            print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
         books_root = (args.vault_root.expanduser() / args.output_dir).resolve()
         results: list[dict[str, Any]] = []
